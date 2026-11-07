@@ -1,0 +1,334 @@
+<title>AIで仕事を取る 投稿ボード</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+/* Layout: a sticky ledger header (progress + views) over one column of post slips; the next slip to post is outlined and badged. */
+:root{
+  --bg:#F2F4F7; --surface:#FFFFFF; --ink:#141A24; --muted:#586274; --line:#D9DFE7;
+  --accent:#2445C4; --accent-ink:#FFFFFF; --accent-soft:#E6EBFA;
+  --done:#1D7549; --done-soft:#E2F1E9; --warn:#A94C14; --warn-soft:#FAEBDF;
+  --font-display:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --font-body:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1218; --surface:#161C26; --ink:#E7EBF1; --muted:#9BA5B6; --line:#283040;
+    --accent:#8198FF; --accent-ink:#0E1218; --accent-soft:#1C2541;
+    --done:#5FC795; --done-soft:#14281D; --warn:#F2A26B; --warn-soft:#2D1E14;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1218; --surface:#161C26; --ink:#E7EBF1; --muted:#9BA5B6; --line:#283040;
+  --accent:#8198FF; --accent-ink:#0E1218; --accent-soft:#1C2541;
+  --done:#5FC795; --done-soft:#14281D; --warn:#F2A26B; --warn-soft:#2D1E14;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar-inner,.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar-inner{padding-block:12px 0;display:grid;gap:10px}
+.title-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{margin:0;font-family:var(--font-display);font-weight:900;font-size:20px;letter-spacing:.02em;text-wrap:balance}
+h1 .acct{display:block;font-family:var(--font-body);font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.04em}
+.count{font-family:var(--font-mono);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.count b{color:var(--ink);font-size:20px}
+.progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.progress span{display:block;height:100%;width:0;background:var(--done);transition:width .3s ease}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs button{flex:0 0 auto;border:0;background:none;color:var(--muted);font:inherit;font-weight:500;font-size:14px;padding:8px 12px 10px;border-bottom:2px solid transparent;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .n{font-family:var(--font-mono);font-size:12px;margin-left:4px;color:var(--muted)}
+.wrap{padding-block:16px 48px;display:grid;gap:14px}
+.start{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--muted)}
+.start label{font-weight:700;color:var(--ink)}
+.start input{font:inherit;font-family:var(--font-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.howto{margin:0;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.howto b{color:var(--ink)}
+#list{display:grid;gap:14px}
+.slip{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 16px;display:grid;gap:10px;min-width:0;scroll-margin-top:150px}
+.slip.is-next{border:2px solid var(--accent);padding:13px 15px 15px}
+.slip.is-done{opacity:.72}
+.slip-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px}
+.when{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink)}
+.date{color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:500;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.chip.kind-setup{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.next{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
+.chip.ok{background:var(--done-soft);color:var(--done);border-color:transparent}
+.slip h2{margin:0;font-family:var(--font-display);font-weight:700;font-size:17px;line-height:1.45;text-wrap:balance}
+.text{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--font-body);font-size:15px;line-height:1.75;background:var(--bg);border-radius:8px;padding:12px 14px;max-height:none}
+.cont-label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.meta .chars{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.meta .over{color:var(--warn);font-weight:700}
+.tagbtn{font:inherit;font-size:12px;font-weight:500;border:1px dashed var(--accent);color:var(--accent);background:none;border-radius:999px;padding:2px 10px;cursor:pointer}
+.memo{margin:0;font-size:13px;color:var(--ink);background:var(--warn-soft);border-radius:8px;padding:8px 12px;white-space:pre-wrap}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.donebtn[aria-pressed="true"]{background:var(--done-soft);border-color:var(--done);color:var(--done)}
+.btn:focus-visible,.tabs button:focus-visible,.tagbtn:focus-visible,.start input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:24px 16px;text-align:center;color:var(--muted)}
+.foot{display:grid;gap:8px;font-size:12px;color:var(--muted)}
+.foot .btn{justify-self:start;font-size:13px;min-height:36px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:14px;font-weight:500;padding:10px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s ease;max-width:calc(100% - 32px)}
+#toast.show{opacity:1}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<header class="bar">
+  <div class="bar-inner">
+    <div class="title-row">
+      <h1>投稿ボード<span class="acct" id="acctName">Threads｜AIで仕事を取る</span></h1>
+      <div class="count" aria-label="投稿済みの数"><b id="doneCount">0</b> / <span id="totalCount">0</span></div>
+    </div>
+    <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+    <nav class="tabs" role="tablist" aria-label="表示の切り替え">
+      <button type="button" role="tab" data-view="todo" aria-selected="true">これから<span class="n" id="nTodo"></span></button>
+      <button type="button" role="tab" data-view="setup" aria-selected="false">設定<span class="n" id="nSetup"></span></button>
+      <button type="button" role="tab" data-view="all" aria-selected="false">全部<span class="n" id="nAll"></span></button>
+      <button type="button" role="tab" data-view="done" aria-selected="false">投稿済み<span class="n" id="nDone"></span></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="start">
+    <label for="startDate">1日目の日付</label>
+    <input type="date" id="startDate">
+    <span>入れると「1日目 07:30」が実際の日付で出ます</span>
+  </div>
+  <p class="howto"><b>出し方</b>：「本文をコピー」→ Threadsに貼る（または「Threadsで開く」）→ 投稿画面の <b>#</b> でタグを1つ選ぶ → 続きがある日は「スレッドに追加」で続きを貼る → 出したら「投稿した」。最初の30分はリプに返す。</p>
+  <div id="list"></div>
+  <div class="foot">
+    <span id="sync">記録はこの端末にだけ残ります</span>
+    <button type="button" class="btn" id="exportBtn">投稿済みをシート用にコピー</button>
+  </div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const DATA = /*DATA*/[]/*END*/;
+const META = /*META*/{}/*END*/;
+
+const LS = { done: 'aiShigotoBoard.done.v1', start: 'aiShigotoBoard.start.v1', view: 'aiShigotoBoard.view.v1' };
+const WEEK = ['日','月','火','水','木','金','土'];
+const LIMIT = 500;
+
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+function loadLocalDone(){ try { return JSON.parse(lsGet(LS.done) || '{}') || {}; } catch(e){ return {}; } }
+
+let done = loadLocalDone();
+let store = 'local';
+let db = null;
+const pending = new Set();
+let view = lsGet(LS.view) || 'todo';
+let startDate = lsGet(LS.start) || '';
+
+const $ = (id) => document.getElementById(id);
+const isSetup = (r) => r['区分'] === '設定';
+const len = (s) => Array.from(s || '').length;
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+async function copyText(text, okMsg){
+  try { await navigator.clipboard.writeText(text); toast(okMsg || 'コピーしました'); return; } catch(e){}
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch(e){}
+  ta.remove();
+  toast(ok ? (okMsg || 'コピーしました') : 'コピーできませんでした。本文を長押しして選んでください');
+}
+
+function dayLabel(when){
+  const m = /(\d+)日目/.exec(when || '');
+  if (!m || !startDate) return '';
+  const d = new Date(startDate + 'T00:00:00');
+  if (isNaN(d)) return '';
+  d.setDate(d.getDate() + Number(m[1]) - 1);
+  return (d.getMonth()+1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）';
+}
+
+function threadsUrl(text){ return 'https://www.threads.com/intent/post?text=' + encodeURIComponent(text); }
+
+function orderedTodo(){
+  const rows = DATA.filter(r => !done[r['鍵']]);
+  return rows.filter(isSetup).concat(rows.filter(r => !isSetup(r)));
+}
+
+function rowsFor(v){
+  if (v === 'setup') return DATA.filter(isSetup);
+  if (v === 'all') return DATA.slice();
+  if (v === 'done') return DATA.filter(r => done[r['鍵']]).sort((a,b) => String(done[b['鍵']]).localeCompare(String(done[a['鍵']])));
+  return orderedTodo();
+}
+
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function slip(r, nextKey){
+  const key = r['鍵'];
+  const isDone = !!done[key];
+  const s = el('article', 'slip' + (key === nextKey ? ' is-next' : '') + (isDone ? ' is-done' : ''));
+  s.id = 'slip-' + key;
+
+  const head = el('div', 'slip-head');
+  head.appendChild(el('span', 'when', r['いつ'] || ''));
+  const dl = dayLabel(r['いつ']); if (dl) head.appendChild(el('span', 'date', dl));
+  if (isSetup(r)) head.appendChild(el('span', 'chip kind-setup', '設定'));
+  else if (r['型']) head.appendChild(el('span', 'chip', r['型']));
+  if (key === nextKey) head.appendChild(el('span', 'chip next', '次はこれ'));
+  if (isDone) head.appendChild(el('span', 'chip ok', '投稿済み ' + fmtDone(done[key])));
+  s.appendChild(head);
+
+  s.appendChild(el('h2', '', r['題'] || ''));
+
+  const body = r['本文'] || '';
+  if (body) s.appendChild(el('pre', 'text', body));
+
+  const meta = el('div', 'meta');
+  if (body && !isSetup(r)){
+    const n = len(body);
+    meta.appendChild(el('span', 'chars' + (n > LIMIT ? ' over' : ''), '本文 ' + n + '字' + (n > LIMIT ? '（500字を超えています）' : '')));
+  }
+  if (r['タグ']){
+    const tb = el('button', 'tagbtn', '#' + r['タグ']); tb.type = 'button';
+    tb.setAttribute('aria-label', 'タグ「' + r['タグ'] + '」をコピー');
+    tb.addEventListener('click', () => copyText(r['タグ'], 'タグをコピーしました'));
+    meta.appendChild(tb);
+  }
+  if (meta.childNodes.length) s.appendChild(meta);
+
+  const cont = r['続き'] || '';
+  if (cont){
+    s.appendChild(el('div', 'cont-label', '続き（スレッドに追加して貼る）' + '　' + len(cont) + '字'));
+    s.appendChild(el('pre', 'text', cont));
+  }
+  if (r['メモ']) s.appendChild(el('p', 'memo', r['メモ']));
+
+  const act = el('div', 'actions');
+  if (body){
+    const b = el('button', 'btn primary', isSetup(r) ? 'コピー' : '本文をコピー'); b.type = 'button';
+    b.addEventListener('click', () => copyText(body));
+    act.appendChild(b);
+  }
+  if (body && !isSetup(r)){
+    const a = el('a', 'btn', 'Threadsで開く');
+    a.href = threadsUrl(body); a.target = '_blank'; a.rel = 'noopener';
+    act.appendChild(a);
+  }
+  if (cont){
+    const c = el('button', 'btn', '続きをコピー'); c.type = 'button';
+    c.addEventListener('click', () => copyText(cont, '続きをコピーしました'));
+    act.appendChild(c);
+  }
+  const d = el('button', 'btn donebtn', isDone ? '投稿済み（戻す）' : (isSetup(r) ? 'やった' : '投稿した'));
+  d.type = 'button'; d.setAttribute('aria-pressed', isDone ? 'true' : 'false');
+  d.addEventListener('click', () => toggle(key));
+  act.appendChild(d);
+  s.appendChild(act);
+  return s;
+}
+
+function fmtDone(iso){
+  const d = new Date(iso); if (isNaN(d)) return '';
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function render(){
+  const total = DATA.length;
+  const nDone = DATA.filter(r => done[r['鍵']]).length;
+  $('doneCount').textContent = nDone;
+  $('totalCount').textContent = total;
+  $('progressFill').style.width = (total ? Math.round(nDone / total * 100) : 0) + '%';
+  $('nTodo').textContent = total - nDone;
+  $('nSetup').textContent = DATA.filter(isSetup).length;
+  $('nAll').textContent = total;
+  $('nDone').textContent = nDone;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.view === view ? 'true' : 'false'));
+
+  const todo = orderedTodo();
+  const nextKey = todo.length ? todo[0]['鍵'] : '';
+  const rows = rowsFor(view);
+  const list = $('list');
+  list.textContent = '';
+  if (!rows.length){
+    list.appendChild(el('div', 'empty', view === 'done' ? 'まだ投稿済みはありません。出したら「投稿した」を押すとここに並びます。' : 'ここに出す投稿はありません。'));
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(slip(r, nextKey)));
+  list.appendChild(frag);
+}
+
+async function toggle(key){
+  if (pending.has(key)) return;
+  const was = !!done[key];
+  const at = new Date().toISOString();
+  if (was) delete done[key]; else done[key] = at;
+  render();
+  if (store === 'db' && db){
+    pending.add(key);
+    try {
+      const ref = db.collection('done').doc(key);
+      if (was) await ref.delete(); else await ref.set({ key: key, at: at });
+    } catch(e){
+      if (was) done[key] = at; else delete done[key];
+      render();
+      toast('保存できませんでした。少し待ってもう一度押してください');
+    } finally { pending.delete(key); }
+  } else {
+    lsSet(LS.done, JSON.stringify(done));
+  }
+  if (!was) toast('投稿済みにしました');
+}
+
+function exportDone(){
+  const lines = DATA.filter(r => done[r['鍵']]).map(r => {
+    const d = new Date(done[r['鍵']]);
+    const ymd = isNaN(d) ? '' : d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+    return r['鍵'] + '\tTRUE\t' + ymd;
+  });
+  if (!lines.length){ toast('投稿済みがまだありません'); return; }
+  copyText('鍵\t完了\t完了した日時\n' + lines.join('\n'), lines.length + '件をコピーしました（鍵・完了・日時）');
+}
+
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  view = b.dataset.view; lsSet(LS.view, view); render(); window.scrollTo({ top: 0 });
+}));
+$('startDate').value = startDate;
+$('startDate').addEventListener('change', (e) => { startDate = e.target.value; lsSet(LS.start, startDate); render(); });
+$('exportBtn').addEventListener('click', exportDone);
+if (META.account) $('acctName').textContent = META.account;
+render();
+
+(async () => {
+  if (!window.claude || typeof window.claude.use !== 'function') return;
+  let d = null;
+  try { d = await window.claude.use('db'); } catch(e){ d = null; }
+  if (!d) return;
+  db = d; store = 'db';
+  $('sync').textContent = '記録を読み込み中…';
+  const timer = setTimeout(() => { $('sync').textContent = '記録の保存先にまだつながりません。表示が古い可能性があります'; }, 10000);
+  db.collection('done').onSnapshot((snap) => {
+    if (!snap.metadata.fromCache){ clearTimeout(timer); $('sync').textContent = '記録はクラウドに保存（スマホとPCで同じ）'; }
+    const next = {};
+    snap.docs.forEach(doc => { const v = doc.data(); if (v && v.at) next[v.key || doc.id] = v.at; });
+    pending.forEach(k => { if (done[k]) next[k] = done[k]; else delete next[k]; });
+    done = next; render();
+  }, () => {
+    clearTimeout(timer); db = null; store = 'local'; done = loadLocalDone();
+    $('sync').textContent = '記録はこの端末にだけ残ります'; render();
+  });
+})();
+</script>
