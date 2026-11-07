@@ -28,3 +28,19 @@ python3 ai-shigoto/tools/build_board.py
 
 投稿・note・LINEの文面にある【】は、**事実に合わせて直す所**です（件数・金額・URL・日付など）。
 分からない数字は書かずに、言い方を変えてください。盛った数字は出さない、が全体のルールです。
+
+## ローカルで続ける（Mac）
+
+案件の実例・数字はローカルの資料にあるので、仕上げはローカルの Claude Code でやる。
+
+```bash
+git clone https://github.com/nakajimaakimasa-cpu/ai-bijo-brief.git
+```
+
+```bash
+cd ai-bijo-brief && git checkout claude/hopeful-brown-umq34v
+```
+
+1. 非公開キット（`ai-shigoto-private.zip`）を `ai-shigoto/private/` に展開する（`.gitignore` 済みなので公開されない）
+2. リポジトリの一番上で `claude` を起動し、`ai-shigoto/private/LOCAL_START.md` の「最初に送る指示」を貼る
+3. 作業のルールは [CLAUDE.md](CLAUDE.md)
